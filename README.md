@@ -14,7 +14,13 @@ NightPlug sits by your bed (ESP32-S3 on USB power) and turns WiFi radio reflecti
 | **22 July+** | Wire real ESP32-S3 CSI (RuView-compatible) | Planned |
 | Later | Always-on host, phone glance, multi-night trends | Planned |
 
-## Project path
+## Project path & GitHub
+
+| | |
+|--|--|
+| **Local** | `C:\Users\Vikas Sharma\OneDrive\Documents\Claude\Projects\NightPlug` |
+| **GitHub** | https://github.com/vikasiec/NightPlug |
+| **Agent rules** | See [`AGENTS.md`](AGENTS.md) — all future work on this product stays in this repo |
 
 ```
 C:\Users\Vikas Sharma\OneDrive\Documents\Claude\Projects\NightPlug
