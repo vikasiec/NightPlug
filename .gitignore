@@ -1,0 +1,20 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.env
+*.log
+.DS_Store
+Thumbs.db
+# Generated personal data (regenerate with: python -m nightplug demo)
+data/nights/*.jsonl
+reports/*.html
+!data/nights/.gitkeep
+!reports/.gitkeep
+
