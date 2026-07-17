@@ -105,6 +105,21 @@ MSYS_NO_PATHCONV=1 docker run --rm \
 
 **Confirmed on hardware (2026-07-17):** after reflashing, CSI yield sustained ~29-34pps over a 90-second serial capture (previously dropped to 0pps within seconds), `presence`/`motion`/`breathing_bpm` all read live non-zero values, and `python -m nightplug live` wrote 47 real Samples end-to-end to `data/nights/2026-07-17.jsonl`.
 
+## Local flash buffer + offline resilience (added 2026-07-17)
+
+The board previously sent sensing output over fire-and-forget UDP with no local storage — if the PC wasn't running `nightplug live` at that exact moment, the reading was lost forever. Since the PC won't be on 24/7, this meant most of every night was silently dropped.
+
+Fixed by adding a flash-backed ring buffer on the board itself (`firmware/esp32-csi-node/main/sample_buffer.c`, RuView repo) — persists ~8.6 hours of readings (one night) on the previously-unused `spiffs` partition, independent of whether the live UDP send succeeds. A local HTTP API on the existing OTA server (port 8032) exposes it:
+
+- `GET http://<esp32-ip>:8032/data/status` — buffer coverage summary
+- `GET http://<esp32-ip>:8032/data/pull?since=<unix_s>&limit=<n>` — pull buffered records
+
+On the PC side, `python -m nightplug sync --host <esp32-ip>` pulls whatever was buffered while nothing was listening and merges it into the right night's file, deduping against anything `live` already captured. Run it any time the PC comes back online — no need to have `live` running continuously.
+
+**Known limits:** buffer holds ~one night (older data is overwritten once full — not a log, a ring buffer), and the local HTTP API has no authentication (same LAN-trust posture as the existing OTA endpoint — fine for a home network, a gap to close before shipping to anyone else). Requires the 8MB partition table; not available on 4MB boards (no spare partition).
+
+Board's IP can change if your router doesn't reserve it — find it via `arp -a` (search for MAC `d4:05:92:79:93:b0`) or your router's DHCP client list if `sync` can't connect.
+
 ## Placement
 
 - Nightstand, 1–2 m from mattress
