@@ -76,6 +76,18 @@ def render_html(summary: NightSummary) -> str:
         )
     timeline = " ".join(timeline_bits) if timeline_bits else "<span class='muted'>n/a</span>"
 
+    gap_notice = ""
+    if summary.gap_count:
+        gap_min = summary.gap_secs_total / 60.0
+        gap_notice = f"""
+        <div class="card" style="border-color:#7c2d12;">
+          <h2>⚠ Sensing gaps detected</h2>
+          <p class="muted">{summary.gap_count} gap(s) totaling ~{gap_min:.0f} min where no data arrived
+          — likely the listener (PC) was off or asleep during part of the night.
+          Durations above only cover time that was actually captured.</p>
+        </div>
+        """
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -196,6 +208,8 @@ def render_html(summary: NightSummary) -> str:
       <div class="muted">Awake motion</div>
       {_bar(awake_pct, "#f97316")}
     </div>
+
+    {gap_notice}
 
     <div class="card">
       <h2>Why this score</h2>

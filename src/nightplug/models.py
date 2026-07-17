@@ -70,6 +70,8 @@ class NightSummary:
     apnea_like_events: int
     apnea_candidates: list[ApneaCandidate] = field(default_factory=list)
     state_timeline: list[dict[str, Any]] = field(default_factory=list)
+    gap_count: int = 0
+    gap_secs_total: int = 0
     score: int = 0
     score_reasons: list[str] = field(default_factory=list)
     disclaimer: str = (
