@@ -48,6 +48,37 @@ def load_samples(path: Path) -> tuple[str, list[Sample]]:
     return night_id, samples
 
 
+def merge_dedupe_samples(existing: list[Sample], new: list[Sample]) -> list[Sample]:
+    """Merge two sample lists for the same night, deduping on (ts, source)
+    and sorting by ts. Used whenever a night's file might already have
+    data from another source (e.g. `live` running after `sync` already
+    populated the night, or vice versa) so neither overwrites the other.
+    """
+    seen = {(s.ts, s.source) for s in existing}
+    merged = list(existing)
+    for s in new:
+        key = (s.ts, s.source)
+        if key not in seen:
+            merged.append(s)
+            seen.add(key)
+    merged.sort(key=lambda s: s.ts)
+    return merged
+
+
+def append_samples(samples: list[Sample], night_id: str | None = None) -> Path:
+    """Merge `samples` into the night's existing file (if any) instead of
+    overwriting it — see merge_dedupe_samples. Prefer this over
+    write_samples() for any source that might run more than once per
+    night (live, sync) so a second run can't silently discard the first.
+    """
+    path = night_path(night_id)
+    existing: list[Sample] = []
+    if path.exists():
+        _, existing = load_samples(path)
+    merged = merge_dedupe_samples(existing, samples)
+    return write_samples(merged, night_id=night_id)
+
+
 def list_nights() -> list[Path]:
     ensure_dirs()
     return sorted(DATA_DIR.glob("*.jsonl"))

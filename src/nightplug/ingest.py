@@ -43,8 +43,17 @@ def _rssi_to_quality(rssi_dbm: int) -> float:
     return max(0.0, min(1.0, (rssi_dbm + 90) / 60))
 
 
-def parse_feature_state_packet(data: bytes) -> Sample | None:
-    """Parse a 60-byte ADR-081 rv_feature_state_t into a Sample, or None if not this type."""
+def parse_feature_state_packet(data: bytes, ts_override: str | None = None) -> Sample | None:
+    """Parse a 60-byte ADR-081 rv_feature_state_t into a Sample, or None if not this type.
+
+    By default stamps the Sample with the receipt time (correct for the
+    live UDP path, where receipt is contemporaneous with sensing). Pass
+    ts_override (an ISO-8601 string) when parsing a record pulled from the
+    ESP32's local flash buffer (see sync.py) — those records carry their
+    own real sensing-time timestamp, which must be used instead of "now"
+    or backfilled data would be silently misdated to whenever it happened
+    to sync.
+    """
     if len(data) < FEATURE_STATE_STRUCT.size:
         return None
     (
@@ -75,7 +84,7 @@ def parse_feature_state_packet(data: bytes) -> Sample | None:
         quality *= 0.5
 
     return Sample(
-        ts=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        ts=ts_override or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         presence=max(0.0, min(1.0, presence_score)),
         motion=max(0.0, min(1.0, motion_score)),
         breathing_bpm=respiration_bpm,

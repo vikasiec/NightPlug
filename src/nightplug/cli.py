@@ -10,11 +10,12 @@ from pathlib import Path
 from nightplug import __product__, __version__
 from nightplug.config import DATA_DIR, ESP32_ETA, ESP32_NOTE, REPORTS_DIR, ROOT, ensure_dirs
 from nightplug.ingest import DEFAULT_PORT, listen
-from nightplug.logger import latest_night, list_nights, load_samples, write_samples
+from nightplug.logger import append_samples, latest_night, list_nights, load_samples, write_samples
 from nightplug.report import write_report
 from nightplug.scoring import score_night
 from nightplug.session import analyze_samples
 from nightplug.simulate import PROFILES, simulate_night
+from nightplug.sync import DEFAULT_HTTP_PORT, SyncError, sync
 
 
 def _cmd_status(_: argparse.Namespace) -> int:
@@ -147,8 +148,28 @@ def _cmd_live(args: argparse.Namespace) -> int:
         print("No vitals packets received. Check the board is provisioned and on the same network.")
         return 1
 
-    path = write_samples(samples, night_id=night_id)
+    path = append_samples(samples, night_id=night_id)
     print(f"Wrote {len(samples):,} samples -> {path}")
+    return 0
+
+
+def _cmd_sync(args: argparse.Namespace) -> int:
+    ensure_dirs()
+    print(f"Pulling buffered data from {args.host}:{args.port} ...")
+    try:
+        added = sync(args.host, port=args.port)
+    except SyncError as e:
+        print(f"Sync failed: {e}", file=sys.stderr)
+        return 1
+
+    if not added:
+        print("Nothing new — device buffer is empty or already caught up.")
+        return 0
+
+    total = sum(added.values())
+    print(f"Pulled {total:,} new sample(s) across {len(added)} night(s):")
+    for night_id, count in sorted(added.items()):
+        print(f"  {night_id}: +{count:,}")
     return 0
 
 
@@ -189,6 +210,11 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--minutes", type=float, default=None, help="Stop after N minutes (default: run until Ctrl+C)")
     live.add_argument("--date", help="Night id YYYY-MM-DD")
     live.set_defaults(func=_cmd_live)
+
+    sy = sub.add_parser("sync", help="Pull buffered data from an ESP32 board's local HTTP API")
+    sy.add_argument("--host", required=True, help="Board's IP address or hostname")
+    sy.add_argument("--port", type=int, default=DEFAULT_HTTP_PORT)
+    sy.set_defaults(func=_cmd_sync)
 
     return p
 

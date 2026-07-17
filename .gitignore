@@ -14,6 +14,7 @@ build/
 Thumbs.db
 # Generated personal data (regenerate with: python -m nightplug demo)
 data/nights/*.jsonl
+data/nights/.sync_state.json
 reports/*.html
 !data/nights/.gitkeep
 !reports/.gitkeep
