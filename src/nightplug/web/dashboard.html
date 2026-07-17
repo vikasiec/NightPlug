@@ -484,9 +484,19 @@ async function loadDevice() {
   const res = await fetch("/api/device").then(r => r.json());
 
   if (!res.reachable) {
-    el.innerHTML = `<div class="empty-state"><div class="big">📡</div>${esc(res.error || 'Device unreachable.')}<br/><br/><span style="font-family:var(--font-mono); font-size:12px;">Start with: nightplug ui --host &lt;esp32-ip&gt;</span></div>`;
+    // Still offer Sync — the status check above can time out even when a
+    // sync attempt a moment later would succeed (flaky WiFi, DHCP churn),
+    // and there was previously no way to retry without reloading code.
+    el.innerHTML = `<div class="empty-state">
+      <div class="big">📡</div>
+      ${esc(res.error || 'Device unreachable.')}<br/><br/>
+      <span style="font-family:var(--font-mono); font-size:12px;">Start with: nightplug ui --host &lt;esp32-ip&gt;</span>
+      <div style="margin-top:18px;">${res.host ? `<button class="sync-btn" id="syncBtn">⟳ Try sync anyway</button>` : ''}</div>
+      <div id="syncResult" style="margin-top:14px; text-align:left;"></div>
+    </div>`;
     setStatusPill("offline", "DEVICE OFFLINE");
     updateRail(res.host, false);
+    if (res.host) wireSyncButton();
     return;
   }
   setStatusPill("ok", "LIVE");
@@ -524,8 +534,13 @@ async function loadDevice() {
     <div id="syncResult"></div>
   `;
 
-  $("syncBtn").addEventListener("click", async () => {
-    const btn = $("syncBtn");
+  wireSyncButton();
+}
+
+function wireSyncButton() {
+  const btn = $("syncBtn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
     btn.disabled = true; btn.textContent = "⟳ Syncing…";
     try {
       const resp = await fetch("/api/sync", { method: "POST" });
