@@ -21,4 +21,4 @@ nightplug = "nightplug.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-nightplug = ["py.typed"]
+nightplug = ["py.typed", "web/*.html"]

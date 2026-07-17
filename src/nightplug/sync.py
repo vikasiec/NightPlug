@@ -16,7 +16,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from nightplug.config import DATA_DIR, ensure_dirs
-from nightplug.ingest import QFLAG_CALIBRATING, QFLAG_DEGRADED_MODE, QFLAG_RESPIRATION_VALID
+from nightplug.ingest import (
+    QFLAG_CALIBRATING,
+    QFLAG_DEGRADED_MODE,
+    QFLAG_HEARTBEAT_VALID,
+    QFLAG_RESPIRATION_VALID,
+)
 from nightplug.logger import append_samples
 from nightplug.models import Sample
 
@@ -33,7 +38,7 @@ def _sync_state_path() -> Path:
     return DATA_DIR / ".sync_state.json"
 
 
-def _load_cursor(host: str) -> int:
+def load_cursor(host: str) -> int:
     path = _sync_state_path()
     if not path.exists():
         return 0
@@ -56,7 +61,7 @@ def _save_cursor(host: str, cursor: int) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
-def _fetch_json(url: str, timeout: float = 10.0) -> dict:
+def fetch_json(url: str, timeout: float = 10.0) -> dict:
     with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (LAN-local device, user-supplied host)
         return json.loads(resp.read().decode("utf-8"))
 
@@ -72,6 +77,9 @@ def _record_to_sample(rec: dict) -> Sample:
     if quality_flags & (QFLAG_DEGRADED_MODE | QFLAG_CALIBRATING):
         quality *= 0.5
 
+    # Experimental — see ingest.parse_feature_state_packet's matching note.
+    hr_valid = bool(quality_flags & QFLAG_HEARTBEAT_VALID)
+
     ts = datetime.fromtimestamp(int(rec["ts"]), tz=timezone.utc).isoformat(timespec="seconds")
     return Sample(
         ts=ts,
@@ -80,6 +88,8 @@ def _record_to_sample(rec: dict) -> Sample:
         breathing_bpm=float(rec.get("respiration_bpm", 0.0)),
         signal_quality=max(0.0, min(1.0, quality)),
         source="esp32",
+        heartbeat_bpm=float(rec.get("heartbeat_bpm", 0.0)) if hr_valid else 0.0,
+        heartbeat_conf=float(rec.get("heartbeat_conf", 0.0)) if hr_valid else 0.0,
     )
 
 
@@ -97,20 +107,20 @@ def sync(host: str, port: int = DEFAULT_HTTP_PORT) -> dict[str, int]:
     """
     base = f"http://{host}:{port}"
     try:
-        status = _fetch_json(f"{base}/data/status")
+        status = fetch_json(f"{base}/data/status")
     except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
         raise SyncError(f"Could not reach {base}/data/status: {e}") from e
 
     if status.get("record_count", 0) == 0:
         return {}
 
-    cursor = _load_cursor(host)
+    cursor = load_cursor(host)
     since = cursor
     new_samples: list[Sample] = []
 
     while True:
         try:
-            resp = _fetch_json(f"{base}/data/pull?since={since}&limit={PULL_LIMIT}")
+            resp = fetch_json(f"{base}/data/pull?since={since}&limit={PULL_LIMIT}")
         except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
             raise SyncError(f"Could not reach {base}/data/pull: {e}") from e
 

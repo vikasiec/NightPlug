@@ -32,6 +32,7 @@ VITALS_STRUCT = struct.Struct("<IBBHIbBHffII")
 FEATURE_STATE_STRUCT = struct.Struct("<IBBHQfffffffffHHI")
 
 QFLAG_RESPIRATION_VALID = 1 << 1
+QFLAG_HEARTBEAT_VALID = 1 << 2
 QFLAG_DEGRADED_MODE = 1 << 5
 QFLAG_CALIBRATING = 1 << 6
 
@@ -66,8 +67,8 @@ def parse_feature_state_packet(data: bytes, ts_override: str | None = None) -> S
         presence_score,
         respiration_bpm,
         respiration_conf,
-        _heartbeat_bpm,
-        _heartbeat_conf,
+        heartbeat_bpm,
+        heartbeat_conf,
         _anomaly_score,
         _env_shift_score,
         _node_coherence,
@@ -83,6 +84,13 @@ def parse_feature_state_packet(data: bytes, ts_override: str | None = None) -> S
     if quality_flags & (QFLAG_DEGRADED_MODE | QFLAG_CALIBRATING):
         quality *= 0.5
 
+    # Experimental: the firmware's heartbeat_conf isn't a real confidence
+    # score, just a binary "was this in a plausible physiological range"
+    # flag (see QFLAG_HEARTBEAT_VALID in adaptive_controller.c). Zero out
+    # the reading when that flag isn't set rather than showing a number
+    # the firmware itself didn't trust.
+    hr_valid = bool(quality_flags & QFLAG_HEARTBEAT_VALID)
+
     return Sample(
         ts=ts_override or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         presence=max(0.0, min(1.0, presence_score)),
@@ -90,6 +98,8 @@ def parse_feature_state_packet(data: bytes, ts_override: str | None = None) -> S
         breathing_bpm=respiration_bpm,
         signal_quality=max(0.0, min(1.0, quality)),
         source="esp32",
+        heartbeat_bpm=heartbeat_bpm if hr_valid else 0.0,
+        heartbeat_conf=heartbeat_conf if hr_valid else 0.0,
     )
 
 

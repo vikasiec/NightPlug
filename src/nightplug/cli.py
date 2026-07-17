@@ -16,6 +16,8 @@ from nightplug.scoring import score_night
 from nightplug.session import analyze_samples
 from nightplug.simulate import PROFILES, simulate_night
 from nightplug.sync import DEFAULT_HTTP_PORT, SyncError, sync
+from nightplug.webui import DEFAULT_UI_PORT
+from nightplug.webui import run as run_webui
 
 
 def _cmd_status(_: argparse.Namespace) -> int:
@@ -173,6 +175,12 @@ def _cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ui(args: argparse.Namespace) -> int:
+    ensure_dirs()
+    run_webui(port=args.port, host=args.host, open_browser=not args.no_browser)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nightplug",
@@ -215,6 +223,12 @@ def build_parser() -> argparse.ArgumentParser:
     sy.add_argument("--host", required=True, help="Board's IP address or hostname")
     sy.add_argument("--port", type=int, default=DEFAULT_HTTP_PORT)
     sy.set_defaults(func=_cmd_sync)
+
+    ui = sub.add_parser("ui", help="Launch the local dashboard (Tonight / Trends / Device)")
+    ui.add_argument("--port", type=int, default=DEFAULT_UI_PORT)
+    ui.add_argument("--host", help="ESP32 board's IP, for the Device page and Sync button")
+    ui.add_argument("--no-browser", action="store_true", help="Don't auto-open a browser tab")
+    ui.set_defaults(func=_cmd_ui)
 
     return p
 

@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>NightPlug — Dashboard</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --surface: #121a2b;
+    --surface-2: #17223a;
+    --surface-hover: #1c2942;
+    --border: #243049;
+    --border-soft: #1b273f;
+    --text: #e8eefc;
+    --text-muted: #93a0b8;
+    --text-faint: #5f6c85;
+    --accent: #38bdf8;
+    --accent-dim: #1c5876;
+    --accent-2: #a78bfa;
+    --good: #22c55e;
+    --good-bg: #123322;
+    --warn: #f59e0b;
+    --warn-bg: #3a2a0d;
+    --crit: #ef4444;
+    --crit-bg: #3a1414;
+    --font-body: -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f7; --surface: #ffffff; --surface-2: #f3f5fa; --surface-hover: #e9edf5;
+    --border: #dde3ee; --border-soft: #e6eaf2; --text: #131b2c; --text-muted: #5b6478; --text-faint: #93a0b8;
+    --accent: #0284c7; --accent-dim: #cfeaf9; --accent-2: #7c3aed;
+    --good: #16a34a; --good-bg: #e7f7ed; --warn: #d97706; --warn-bg: #fdf1de; --crit: #dc2626; --crit-bg: #fbe8e8;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #eef1f7; --surface: #ffffff; --surface-2: #f3f5fa; --surface-hover: #e9edf5;
+      --border: #dde3ee; --border-soft: #e6eaf2; --text: #131b2c; --text-muted: #5b6478; --text-faint: #93a0b8;
+      --accent: #0284c7; --accent-dim: #cfeaf9; --accent-2: #7c3aed;
+      --good: #16a34a; --good-bg: #e7f7ed; --warn: #d97706; --warn-bg: #fdf1de; --crit: #dc2626; --crit-bg: #fbe8e8;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+  body { display: flex; min-height: 100vh; }
+
+  .rail { width: 216px; flex: 0 0 216px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 14px; display: flex; flex-direction: column; gap: 22px; }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 0 6px; }
+  .brand-mark { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(155deg, var(--accent), var(--accent-2)); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .brand-name { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 10.5px; color: var(--text-faint); margin-top: -2px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: var(--text-muted); cursor: pointer; user-select: none; border: 1px solid transparent; }
+  .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent-dim); }
+  .nav-icon { width: 15px; text-align: center; opacity: 0.9; font-size: 13px; }
+  .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+  .device-chip { display: flex; align-items: center; gap: 8px; padding: 9px 10px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 9px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; }
+  .dot.ok { background: var(--good); box-shadow: 0 0 0 3px var(--good-bg); }
+  .dot.bad { background: var(--crit); box-shadow: 0 0 0 3px var(--crit-bg); }
+  .device-chip-text { font-size: 11.5px; line-height: 1.3; }
+  .device-chip-text b { display: block; font-size: 12.5px; color: var(--text); }
+  .device-chip-text span { color: var(--text-faint); font-family: var(--font-mono); }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { height: 58px; flex: 0 0 58px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  .topbar .sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; font-family: var(--font-mono); }
+  .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft); }
+  .status-pill.live { background: var(--good-bg); color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, transparent); }
+  .status-pill.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
+  .theme-toggle { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .theme-toggle:hover { color: var(--text); border-color: var(--accent-dim); }
+
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+  .view { display: none; max-width: 1080px; margin: 0 auto; }
+  .view.active { display: block; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-faint); }
+  .empty-state .big { font-size: 32px; margin-bottom: 8px; }
+
+  .hero { display: grid; grid-template-columns: auto 1fr; gap: 26px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px 26px; margin-bottom: 18px; }
+  .score-ring { position: relative; width: 104px; height: 104px; flex-shrink: 0; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring .num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hero-meta h2 { margin: 0 0 4px; font-size: 19px; font-weight: 650; letter-spacing: -0.01em; text-wrap: balance; }
+  .hero-meta .window { font-size: 12.5px; color: var(--text-faint); font-family: var(--font-mono); margin-bottom: 10px; }
+  .hero-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 6px; background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft); }
+  .tag.good { color: var(--good); background: var(--good-bg); border-color: color-mix(in srgb, var(--good) 25%, transparent); }
+  .tag.warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 25%, transparent); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 13px 14px; }
+  .tile .k { font-size: 11px; color: var(--text-faint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+  .tile .v { font-family: var(--font-mono); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile .v small { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-left: 2px; }
+  .tile.experimental { border-style: dashed; }
+  .tile .v.dim { color: var(--text-faint); font-size: 14px; font-weight: 500; }
+  .exp-badge { font-size: 8.5px; font-weight: 700; letter-spacing: 0.03em; padding: 1px 5px; border-radius: 4px; background: var(--warn-bg); color: var(--warn); text-transform: none; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; gap: 10px; flex-wrap: wrap; }
+  .card-head h3 { font-size: 13.5px; font-weight: 650; margin: 0; }
+  .card-head .legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--text-muted); }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch { width: 8px; height: 8px; border-radius: 2px; }
+  .card-note { font-size: 11.5px; color: var(--text-faint); margin: 0 0 10px; }
+
+  .chart-wrap { position: relative; }
+  svg.chart { width: 100%; height: 132px; display: block; overflow: visible; }
+  .gridline { stroke: var(--border-soft); stroke-width: 1; }
+  .area-motion { fill: url(#gradMotion); }
+  .line-motion { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linecap: round; }
+  .line-breath { stroke: var(--accent-2); stroke-width: 2; fill: none; stroke-linecap: round; }
+  .area-breath { fill: url(#gradBreath); }
+  .hover-x { stroke: var(--text-faint); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0; }
+  .hover-dot { opacity: 0; }
+  .tooltip { position: absolute; pointer-events: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 11.5px; line-height: 1.5; opacity: 0; transform: translate(-50%, -110%); white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,0.35); z-index: 5; }
+  .tooltip b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .tooltip .t-time { color: var(--text-faint); font-family: var(--font-mono); margin-bottom: 3px; }
+
+  .timeline-bar { display: flex; height: 30px; border-radius: 7px; overflow: hidden; border: 1px solid var(--border-soft); }
+  .seg { display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em; color: rgba(255,255,255,0.92); overflow: hidden; white-space: nowrap; }
+  .seg.empty, .seg.up { background: #374151; color: #d1d5db; }
+  .seg.awake_in_bed { background: #7c2d12; }
+  .seg.sleep_like { background: #14532d; }
+  .seg.restless { background: #78350f; }
+  .seg.in_bed { background: #1e3a5f; }
+  .timeline-legend { display: flex; gap: 14px; margin-top: 9px; flex-wrap: wrap; }
+
+  .reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .reasons li { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--text-muted); }
+  .reasons .ricon { width: 16px; text-align: center; font-size: 12px; flex-shrink: 0; }
+  .reasons .ricon.pos { color: var(--good); }
+  .reasons .ricon.neg { color: var(--crit); }
+
+  .two-col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+
+  .bars-wrap { display: flex; align-items: flex-end; gap: 5px; height: 120px; padding-top: 6px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .bar { width: 100%; border-radius: 4px 4px 2px 2px; background: var(--accent); position: relative; cursor: default; min-height: 2px; }
+  .bar.low { background: var(--warn); }
+  .bar.crit { background: var(--crit); }
+  .bar-day { font-size: 9.5px; color: var(--text-faint); font-family: var(--font-mono); }
+
+  .streak-row { display: flex; gap: 8px; margin-top: 4px; margin-bottom: 14px; }
+  .streak-tile { flex: 1; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px 14px; text-align: center; }
+  .streak-tile .v { font-family: var(--font-mono); font-size: 22px; font-weight: 650; }
+  .streak-tile .k { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .device-hero { display: flex; gap: 20px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-bottom: 14px; flex-wrap: wrap; }
+  .device-hero-text h3 { margin: 0 0 3px; font-size: 15px; font-weight: 650; }
+  .device-hero-text p { margin: 0; font-size: 12px; color: var(--text-muted); }
+  .device-hero-text .mono { font-family: var(--font-mono); color: var(--text-faint); }
+  .sync-btn { margin-left: auto; background: var(--accent); color: #04141c; border: none; border-radius: 9px; padding: 10px 16px; font-size: 12.5px; font-weight: 650; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; gap: 7px; }
+  .sync-btn:hover { filter: brightness(1.08); }
+  .sync-btn:disabled { opacity: 0.6; cursor: default; }
+
+  .kv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--border-soft); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; }
+  .kv { background: var(--surface); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .kv .k { font-size: 12px; color: var(--text-muted); }
+  .kv .v { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .kv .v.ok { color: var(--good); }
+  .kv .v.bad { color: var(--crit); }
+
+  .log-list { display: flex; flex-direction: column; }
+  .log-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12px; align-items: center; }
+  .log-row:last-child { border-bottom: none; }
+  .log-time { font-family: var(--font-mono); color: var(--text-faint); font-size: 11px; }
+  .log-msg { color: var(--text-muted); }
+  .log-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; letter-spacing: 0.02em; }
+  .log-badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .log-badge.ok { background: var(--good-bg); color: var(--good); }
+
+  footer.disclaimer { margin-top: 6px; padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.6; }
+</style>
+</head>
+<body>
+  <nav class="rail">
+    <div class="brand">
+      <div class="brand-mark">🌙</div>
+      <div>
+        <div class="brand-name">NightPlug</div>
+        <div class="brand-sub">bedside sensing</div>
+      </div>
+    </div>
+    <div class="nav">
+      <div class="nav-item active" data-view="tonight"><span class="nav-icon">◐</span>Tonight</div>
+      <div class="nav-item" data-view="trends"><span class="nav-icon">📈</span>Trends</div>
+      <div class="nav-item" data-view="device"><span class="nav-icon">📡</span>Device</div>
+    </div>
+    <div class="rail-foot">
+      <div class="device-chip">
+        <div class="dot" id="railDot"></div>
+        <div class="device-chip-text">
+          <b id="railHost">no device set</b>
+          <span id="railSub">pass --host to enable</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="topbarTitle">Tonight</h1>
+        <div class="sub" id="topbarSub">—</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="status-pill" id="statusPill"><span class="dot"></span>—</span>
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">◐</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="view active" id="view-tonight"><div class="empty-state">Loading…</div></div>
+      <div class="view" id="view-trends"><div class="empty-state">Loading…</div></div>
+      <div class="view" id="view-device"><div class="empty-state">Loading…</div></div>
+    </div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmtHM = (secs) => { const h = Math.floor(secs/3600), m = Math.round((secs%3600)/60); return `${h}h ${String(m).padStart(2,'0')}m`; };
+const fmtTime = (iso) => { try { const d = new Date(iso); return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); } catch { return iso; } };
+const scoreColor = (s) => s >= 85 ? 'var(--good)' : s >= 70 ? '#84cc16' : s >= 50 ? 'var(--warn)' : 'var(--crit)';
+// Server-provided strings (exception messages, score reasons, night ids,
+// state names) go through this before landing in innerHTML — e.g. Python's
+// urllib errors look like "<urlopen error timed out>", which the browser
+// would otherwise silently parse as an unrecognized HTML tag and drop.
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- nav ----------
+const loaders = { tonight: loadTonight, trends: loadTrends, device: loadDevice };
+document.querySelectorAll(".nav-item").forEach(item => {
+  item.addEventListener("click", () => {
+    document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
+    item.classList.add("active");
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    const key = item.dataset.view;
+    $("view-" + key).classList.add("active");
+    loaders[key]();
+  });
+});
+
+$("themeToggle").addEventListener("click", () => {
+  const root = document.documentElement;
+  const cur = root.getAttribute("data-theme");
+  root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+});
+
+// ---------- chart helpers ----------
+function buildPath(values, w, h, pad, min, max) {
+  if (values.length < 2) return "";
+  const step = w / (values.length - 1);
+  return values.map((v, i) => {
+    const x = i * step;
+    const y = pad + (1 - (v - min) / (max - min)) * (h - pad * 2);
+    return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+}
+function buildArea(values, w, h, pad, min, max) {
+  return buildPath(values, w, h, pad, min, max) + ` L${w},${h} L0,${h} Z`;
+}
+function wireChart(values, times, opts) {
+  const { lineId, areaId, hoverXId, hoverDotId, captureId, tipId, unit, min, max } = opts;
+  const w = 760, h = 132, pad = 10;
+  $(lineId).setAttribute("d", buildPath(values, w, h, pad, min, max));
+  if (areaId) $(areaId).setAttribute("d", buildArea(values, w, h, pad, min, max));
+  const capture = $(captureId), hoverX = $(hoverXId), hoverDot = $(hoverDotId), tip = $(tipId);
+  const svg = capture.closest("svg");
+  capture.onmousemove = (e) => {
+    const rect = svg.getBoundingClientRect();
+    const relX = ((e.clientX - rect.left) / rect.width) * w;
+    const idx = Math.max(0, Math.min(values.length - 1, Math.round(relX / (w / (values.length - 1)))));
+    const x = idx * (w / (values.length - 1));
+    const y = pad + (1 - (values[idx] - min) / (max - min)) * (h - pad * 2);
+    hoverX.setAttribute("x1", x); hoverX.setAttribute("x2", x); hoverX.style.opacity = 1;
+    hoverDot.setAttribute("cx", x); hoverDot.setAttribute("cy", y); hoverDot.style.opacity = 1;
+    const wrapRect = svg.parentElement.getBoundingClientRect();
+    tip.style.left = (rect.left - wrapRect.left + (x / w) * rect.width) + "px";
+    tip.style.top = (rect.top - wrapRect.top + (y / h) * rect.height) + "px";
+    tip.style.opacity = 1;
+    tip.innerHTML = `<div class="t-time">${fmtTime(times[idx])}</div><b>${values[idx].toFixed(2)}</b> ${unit}`;
+  };
+  capture.onmouseleave = () => { hoverX.style.opacity = 0; hoverDot.style.opacity = 0; tip.style.opacity = 0; };
+}
+
+function heartRateTile(hr) {
+  if (!hr || hr.avg_bpm === null) {
+    return `<div class="v dim">no confident reading</div>`;
+  }
+  return `<div class="v">${hr.avg_bpm}<small>bpm</small></div><div style="font-size:10.5px; color:var(--text-faint); margin-top:3px;">${hr.coverage_pct}% of samples (CSI-only, no mmWave)</div>`;
+}
+
+// ---------- Tonight ----------
+async function loadTonight() {
+  const el = $("view-tonight");
+  const res = await fetch("/api/tonight").then(r => r.json());
+  if (res.error) { el.innerHTML = `<div class="empty-state"><div class="big">🌙</div>${esc(res.error)}</div>`; return; }
+
+  $("topbarTitle").textContent = "Tonight";
+  $("topbarSub").textContent = res.night_id;
+  setStatusPill(res.gap_count > 0 ? "gaps" : "ok", res.gap_count > 0 ? `${res.gap_count} GAP(S)` : "COMPLETE");
+
+  const circumference = 2 * Math.PI * 45;
+  const offset = circumference * (1 - res.score / 100);
+  const reasonRows = (res.score_reasons || []).map(r => {
+    const neg = /−\d/.test(r);
+    return `<li><span class="ricon ${neg ? 'neg' : 'pos'}">${neg ? '−' : '✓'}</span>${esc(r)}</li>`;
+  }).join("");
+
+  const seg = res.state_timeline || [];
+  const totalMs = seg.length ? (new Date(seg[seg.length-1].end) - new Date(seg[0].start)) : 0;
+  const segHtml = seg.map(s => {
+    const dur = new Date(s.end) - new Date(s.start);
+    const pct = totalMs > 0 ? (dur / totalMs * 100) : 0;
+    if (pct < 0.3) return "";
+    return `<div class="seg ${s.state}" style="width:${pct}%">${pct >= 8 ? s.state.replace('_',' ') : ''}</div>`;
+  }).join("");
+
+  const gapNote = res.gap_count > 0
+    ? `<div class="card" style="border-color: var(--warn);"><div class="card-head"><h3>⚠ Sensing gaps</h3></div><p class="card-note" style="margin:0;">${res.gap_count} gap(s) totaling ~${Math.round(res.gap_secs_total/60)} min where no data arrived — durations above only cover time actually captured.</p></div>`
+    : "";
+
+  el.innerHTML = `
+    <div class="hero">
+      <div class="score-ring">
+        <svg width="104" height="104" viewBox="0 0 104 104">
+          <circle cx="52" cy="52" r="45" fill="none" stroke="var(--border-soft)" stroke-width="9"/>
+          <circle cx="52" cy="52" r="45" fill="none" stroke="${scoreColor(res.score)}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 52 52)"/>
+        </svg>
+        <div class="num">${res.score}</div>
+      </div>
+      <div class="hero-meta">
+        <h2>${res.label}</h2>
+        <div class="window">${fmtTime(res.started_at)} → ${fmtTime(res.ended_at)} · ${fmtHM(res.time_in_bed_secs)} in bed</div>
+        <div class="hero-tags">
+          <span class="tag ${res.apnea_like_events === 0 ? 'good' : 'warn'}">${res.apnea_like_events} apnea-like event(s)</span>
+          <span class="tag">${res.min_breathing_bpm.toFixed(0)}–${res.max_breathing_bpm.toFixed(0)} bpm breathing</span>
+          <span class="tag ${res.gap_count === 0 ? 'good' : 'warn'}">${res.gap_count === 0 ? 'no gaps' : res.gap_count + ' gap(s)'}</span>
+          <span class="tag">source: ${res.source}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="tile"><div class="k">Time in bed</div><div class="v">${fmtHM(res.time_in_bed_secs)}</div></div>
+      <div class="tile"><div class="k">Sleep-like</div><div class="v">${fmtHM(res.sleep_like_secs)}</div></div>
+      <div class="tile"><div class="k">Restless</div><div class="v">${fmtHM(res.restless_secs)}</div></div>
+      <div class="tile"><div class="k">Avg breathing</div><div class="v">${res.avg_breathing_bpm.toFixed(1)}<small>bpm</small></div></div>
+      <div class="tile experimental"><div class="k">Heart rate<span class="exp-badge">EXPERIMENTAL</span></div>${heartRateTile(res.heart_rate)}</div>
+      <div class="tile"><div class="k">Apnea-like</div><div class="v">${res.apnea_like_events}</div></div>
+      <div class="tile"><div class="k">Samples</div><div class="v">${res.sample_count.toLocaleString()}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Motion, through the night</h3><div class="legend"><div class="legend-item"><span class="legend-swatch" style="background:var(--accent)"></span>motion energy</div></div></div>
+      <p class="card-note">0–1 normalized · hover to inspect a moment</p>
+      <div class="chart-wrap">
+        <svg class="chart" viewBox="0 0 760 132" preserveAspectRatio="none">
+          <defs><linearGradient id="gradMotion" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity="0.32"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+          <line class="gridline" x1="0" y1="22" x2="760" y2="22"/><line class="gridline" x1="0" y1="66" x2="760" y2="66"/><line class="gridline" x1="0" y1="110" x2="760" y2="110"/>
+          <path class="area-motion" id="areaMotion" d=""/><path class="line-motion" id="lineMotion" d=""/>
+          <line class="hover-x" id="hoverXMotion" x1="0" y1="0" x2="0" y2="132"/>
+          <circle class="hover-dot" id="hoverDotMotion" r="3.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>
+          <rect id="captureMotion" x="0" y="0" width="760" height="132" fill="transparent"/>
+        </svg>
+        <div class="tooltip" id="tipMotion"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Breathing rate</h3><div class="legend"><div class="legend-item"><span class="legend-swatch" style="background:var(--accent-2)"></span>breaths / min</div></div></div>
+      <p class="card-note">typical rest range 12–20 bpm</p>
+      <div class="chart-wrap">
+        <svg class="chart" viewBox="0 0 760 132" preserveAspectRatio="none">
+          <defs><linearGradient id="gradBreath" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent-2)" stop-opacity="0.28"/><stop offset="100%" stop-color="var(--accent-2)" stop-opacity="0"/></linearGradient></defs>
+          <rect x="0" y="46" width="760" height="46" fill="var(--accent-2)" opacity="0.06"/>
+          <line class="gridline" x1="0" y1="22" x2="760" y2="22"/><line class="gridline" x1="0" y1="66" x2="760" y2="66"/><line class="gridline" x1="0" y1="110" x2="760" y2="110"/>
+          <path class="area-breath" id="areaBreath" d=""/><path class="line-breath" id="lineBreath" d=""/>
+          <line class="hover-x" id="hoverXBreath" x1="0" y1="0" x2="0" y2="132"/>
+          <circle class="hover-dot" id="hoverDotBreath" r="3.5" fill="var(--accent-2)" stroke="var(--surface)" stroke-width="2"/>
+          <rect id="captureBreath" x="0" y="0" width="760" height="132" fill="transparent"/>
+        </svg>
+        <div class="tooltip" id="tipBreath"></div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>State timeline</h3></div>
+        <div class="timeline-bar">${segHtml}</div>
+        <div class="timeline-legend">
+          <div class="legend-item"><span class="legend-swatch" style="background:#374151"></span>empty</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#7c2d12"></span>awake in bed</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#78350f"></span>restless</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:#14532d"></span>sleep-like</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Why this score</h3></div>
+        <ul class="reasons">${reasonRows}</ul>
+      </div>
+    </div>
+
+    ${gapNote}
+
+    <footer class="disclaimer">NightPlug is a personal wellness tool, not a medical device. It does not diagnose sleep apnea or any condition. Hardware path: ESP32-S3 bedside node → local buffer → this dashboard. No cloud.</footer>
+  `;
+
+  const series = res.series || { times: [], motion: [], breathing: [] };
+  if (series.times.length > 1) {
+    wireChart(series.motion, series.times, { lineId: "lineMotion", areaId: "areaMotion", hoverXId: "hoverXMotion", hoverDotId: "hoverDotMotion", captureId: "captureMotion", tipId: "tipMotion", unit: "motion", min: 0, max: 1 });
+    wireChart(series.breathing, series.times, { lineId: "lineBreath", areaId: "areaBreath", hoverXId: "hoverXBreath", hoverDotId: "hoverDotBreath", captureId: "captureBreath", tipId: "tipBreath", unit: "bpm", min: 8, max: 24 });
+  }
+}
+
+// ---------- Trends ----------
+async function loadTrends() {
+  const el = $("view-trends");
+  const res = await fetch("/api/trends?days=14").then(r => r.json());
+  const nights = res.nights || [];
+  if (!nights.length) { el.innerHTML = `<div class="empty-state"><div class="big">📈</div>No nights in the last 14 days yet.</div>`; return; }
+
+  $("topbarTitle").textContent = "Trends";
+  $("topbarSub").textContent = `${nights.length} night(s), last 14 days`;
+
+  const avgScore = Math.round(nights.reduce((a,n) => a+n.score, 0) / nights.length);
+  const avgTib = nights.reduce((a,n) => a+n.time_in_bed_hours, 0) / nights.length;
+  const avgBr = nights.reduce((a,n) => a+n.avg_breathing_bpm, 0) / nights.length;
+  const strong = nights.filter(n => n.score > 85).length;
+
+  const bars = nights.map(n => {
+    const cls = n.score < 50 ? 'crit' : n.score < 70 ? 'low' : '';
+    const day = n.night_id.slice(5);
+    return `<div class="bar-col"><div class="bar ${cls}" style="height:${Math.max(2, n.score/100*96)}px" title="${n.night_id} — score ${n.score}"></div><div class="bar-day">${day}</div></div>`;
+  }).join("");
+
+  const gapNights = nights.filter(n => n.gap_count > 0);
+  const gapRows = gapNights.length
+    ? gapNights.map(n => `<div class="log-row"><span class="log-time">${n.night_id.slice(5)}</span><span class="log-msg">${n.gap_count} gap(s), ~${Math.round(n.gap_secs_total/60)} min uncaptured</span><span class="log-badge warn">GAP</span></div>`).join("")
+    : `<div class="log-row"><span class="log-time">—</span><span class="log-msg">No gaps in this window — every night captured continuously.</span><span class="log-badge ok">CLEAN</span></div>`;
+
+  const breathVals = nights.map(n => n.avg_breathing_bpm);
+  const bMin = Math.min(...breathVals) - 1, bMax = Math.max(...breathVals) + 1;
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-head"><h3>Sleep score, last ${nights.length} night(s)</h3></div>
+      <p class="card-note">hover a bar for that night's score</p>
+      <div class="bars-wrap">${bars}</div>
+    </div>
+    <div class="streak-row">
+      <div class="streak-tile"><div class="v">${avgScore}</div><div class="k">avg score</div></div>
+      <div class="streak-tile"><div class="v">${fmtHM(avgTib*3600)}</div><div class="k">avg time in bed</div></div>
+      <div class="streak-tile"><div class="v">${avgBr.toFixed(1)} bpm</div><div class="k">avg breathing</div></div>
+      <div class="streak-tile"><div class="v">${strong}</div><div class="k">nights &gt; 85</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Avg breathing rate trend</h3><div class="legend"><div class="legend-item"><span class="legend-swatch" style="background:var(--accent-2)"></span>bpm</div></div></div>
+      <div class="chart-wrap">
+        <svg class="chart" style="height:100px" viewBox="0 0 760 100" preserveAspectRatio="none">
+          <line class="gridline" x1="0" y1="20" x2="760" y2="20"/><line class="gridline" x1="0" y1="50" x2="760" y2="50"/><line class="gridline" x1="0" y1="80" x2="760" y2="80"/>
+          <path class="line-breath" id="lineTrendBreath" d=""/>
+        </svg>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Coverage — nights with gaps</h3></div>
+      <p class="card-note">nights where the PC missed a stretch and <code style="font-family:var(--font-mono); color:var(--text-muted);">sync</code> would fill it in</p>
+      <div class="log-list">${gapRows}</div>
+    </div>
+  `;
+  $("lineTrendBreath").setAttribute("d", buildPath(breathVals, 760, 100, 10, bMin, bMax));
+}
+
+// ---------- Device ----------
+async function loadDevice() {
+  const el = $("view-device");
+  const res = await fetch("/api/device").then(r => r.json());
+
+  if (!res.reachable) {
+    el.innerHTML = `<div class="empty-state"><div class="big">📡</div>${esc(res.error || 'Device unreachable.')}<br/><br/><span style="font-family:var(--font-mono); font-size:12px;">Start with: nightplug ui --host &lt;esp32-ip&gt;</span></div>`;
+    setStatusPill("offline", "DEVICE OFFLINE");
+    updateRail(res.host, false);
+    return;
+  }
+  setStatusPill("ok", "LIVE");
+  updateRail(res.host, true);
+  $("topbarTitle").textContent = "Device";
+  $("topbarSub").textContent = res.host;
+
+  const buf = res.buffer;
+  const ota = res.ota;
+  const coverageHrs = buf ? Math.max(0, (buf.newest_ts - buf.oldest_ts) / 3600) : 0;
+
+  el.innerHTML = `
+    <div class="device-hero">
+      <div class="device-hero-text" style="flex:1;">
+        <h3>ESP32-S3 CSI node</h3>
+        <p>${buf ? `${buf.record_count.toLocaleString()} buffered samples · ~${coverageHrs.toFixed(1)}h coverage${buf.buffer_full ? ' (buffer full — oldest data being overwritten)' : ''}` : 'Buffer status unavailable'}</p>
+        <p class="mono">${res.host}</p>
+      </div>
+      <button class="sync-btn" id="syncBtn">⟳ Sync now</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Firmware &amp; buffer</h3></div>
+      <div class="kv-grid">
+        <div class="kv"><span class="k">Firmware version</span><span class="v">${ota ? esc(ota.version) : '—'}</span></div>
+        <div class="kv"><span class="k">Build date</span><span class="v">${ota ? esc(ota.date) : '—'}</span></div>
+        <div class="kv"><span class="k">Running partition</span><span class="v">${ota ? esc(ota.running_partition) : '—'}</span></div>
+        <div class="kv"><span class="k">Buffer full</span><span class="v ${buf && buf.buffer_full ? 'bad' : 'ok'}">${buf ? (buf.buffer_full ? 'yes' : 'no') : '—'}</span></div>
+        <div class="kv"><span class="k">Oldest buffered</span><span class="v">${buf && buf.oldest_ts ? fmtTime(new Date(buf.oldest_ts*1000).toISOString()) : '—'}</span></div>
+        <div class="kv"><span class="k">Newest buffered</span><span class="v">${buf && buf.newest_ts ? fmtTime(new Date(buf.newest_ts*1000).toISOString()) : '—'}</span></div>
+        <div class="kv"><span class="k">Last sync (this PC)</span><span class="v">${res.last_sync_cursor ? fmtTime(new Date(res.last_sync_cursor*1000).toISOString()) : 'never'}</span></div>
+      </div>
+    </div>
+    ${res.error ? `<div class="card" style="border-color:var(--warn);"><div class="card-head"><h3>⚠ Partial data</h3></div><p class="card-note" style="margin:0;">${esc(res.error)}</p></div>` : ''}
+    <div id="syncResult"></div>
+  `;
+
+  $("syncBtn").addEventListener("click", async () => {
+    const btn = $("syncBtn");
+    btn.disabled = true; btn.textContent = "⟳ Syncing…";
+    try {
+      const resp = await fetch("/api/sync", { method: "POST" });
+      const r = await resp.json();
+      if (!resp.ok || r.error) {
+        throw new Error(r.error || `HTTP ${resp.status}`);
+      }
+      const added = r.added || {};
+      const total = Object.values(added).reduce((a,b) => a+b, 0);
+      $("syncResult").innerHTML = total
+        ? `<div class="card"><div class="card-head"><h3>✓ Synced</h3></div><p class="card-note" style="margin:0;">Pulled ${total} new sample(s) across ${Object.keys(added).length} night(s).</p></div>`
+        : `<div class="card"><div class="card-head"><h3>Nothing new</h3></div><p class="card-note" style="margin:0;">Buffer already caught up.</p></div>`;
+      loadDevice();
+    } catch (e) {
+      $("syncResult").innerHTML = `<div class="card" style="border-color:var(--crit);"><div class="card-head"><h3>Sync failed</h3></div><p class="card-note" style="margin:0;">${esc(e.message || String(e))}</p></div>`;
+      btn.disabled = false; btn.textContent = "⟳ Sync now";
+    }
+  });
+}
+
+function setStatusPill(kind, label) {
+  const pill = $("statusPill");
+  pill.className = "status-pill" + (kind === "ok" ? " live" : "");
+  pill.innerHTML = `<span class="dot"></span>${label}`;
+}
+function updateRail(host, ok) {
+  $("railDot").className = "dot " + (host ? (ok ? "ok" : "bad") : "");
+  $("railHost").textContent = host || "no device set";
+  $("railSub").textContent = host ? (ok ? "connected" : "unreachable") : "pass --host to enable";
+}
+
+loadTonight();
+</script>
+</body>
+</html>

@@ -28,6 +28,12 @@ class Sample:
     signal_quality: float  # 0–1
     source: str = "sim"  # sim | esp32 | ruview
     state: str | None = None  # filled by session engine when processing
+    # Experimental — CSI-only heart rate is far less reliable than
+    # presence/motion/breathing (the firmware's own "confidence" is a
+    # binary plausible-range check, not a real score). Default 0.0 so
+    # older JSONL files without these fields still load fine.
+    heartbeat_bpm: float = 0.0
+    heartbeat_conf: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -42,6 +48,8 @@ class Sample:
             signal_quality=float(d.get("signal_quality", 1.0)),
             source=str(d.get("source", "sim")),
             state=d.get("state"),
+            heartbeat_bpm=float(d.get("heartbeat_bpm", 0.0)),
+            heartbeat_conf=float(d.get("heartbeat_conf", 0.0)),
         )
 
 
