@@ -9,6 +9,7 @@ from pathlib import Path
 
 from nightplug import __product__, __version__
 from nightplug.config import DATA_DIR, ESP32_ETA, ESP32_NOTE, REPORTS_DIR, ROOT, ensure_dirs
+from nightplug.ingest import DEFAULT_PORT, listen
 from nightplug.logger import latest_night, list_nights, load_samples, write_samples
 from nightplug.report import write_report
 from nightplug.scoring import score_night
@@ -42,7 +43,7 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
         samples = _rebase_night_id(samples, args.date)
 
     path = write_samples(samples, night_id=night_id)
-    print(f"Wrote {len(samples):,} samples → {path}")
+    print(f"Wrote {len(samples):,} samples -> {path}")
     return 0
 
 
@@ -107,7 +108,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     print(f"Sleep-like:  {summary.sleep_like_secs / 3600:.2f} h")
     print(f"Restless:    {summary.restless_secs / 60:.0f} min")
     print(f"Apnea-like:  {summary.apnea_like_events}")
-    print(f"Report → {out}")
+    print(f"Report -> {out}")
     return 0
 
 
@@ -122,6 +123,33 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     args.latest = False
     args.file = None
     return _cmd_report(args)
+
+
+def _cmd_live(args: argparse.Namespace) -> int:
+    ensure_dirs()
+    night_id = args.date or date.today().isoformat()
+    duration = args.minutes * 60.0 if args.minutes else None
+    port = args.port
+
+    print(f"Listening for ESP32 vitals on UDP {port} ... (Ctrl+C to stop)")
+    samples: list = []
+    try:
+        for sample in listen(port=port, duration_secs=duration):
+            samples.append(sample)
+            print(
+                f"  presence={sample.presence:.2f} motion={sample.motion:.2f} "
+                f"breathing={sample.breathing_bpm:.1f}bpm quality={sample.signal_quality:.2f}"
+            )
+    except KeyboardInterrupt:
+        print("\nStopped.")
+
+    if not samples:
+        print("No vitals packets received. Check the board is provisioned and on the same network.")
+        return 1
+
+    path = write_samples(samples, night_id=night_id)
+    print(f"Wrote {len(samples):,} samples -> {path}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -155,6 +183,12 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--profile", choices=PROFILES, default="normal")
     demo.add_argument("--date", help="Night id YYYY-MM-DD")
     demo.set_defaults(func=_cmd_demo)
+
+    live = sub.add_parser("live", help="Ingest real vitals from an ESP32 CSI node over UDP")
+    live.add_argument("--port", type=int, default=DEFAULT_PORT)
+    live.add_argument("--minutes", type=float, default=None, help="Stop after N minutes (default: run until Ctrl+C)")
+    live.add_argument("--date", help="Night id YYYY-MM-DD")
+    live.set_defaults(func=_cmd_live)
 
     return p
 

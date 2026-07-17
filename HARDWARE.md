@@ -4,22 +4,106 @@
 
 | Item | Detail |
 |------|--------|
-| Board | ESP32-S3 DevKit-style **N16R8** (16 MB flash, 8 MB PSRAM) |
-| ETA | **2026-07-22** |
+| Board | ESP32-S3 DevKit-style **N16R8** (16 MB flash, 8 MB PSRAM), OceanLabz |
+| ETA | ~~2026-07-22~~ arrived early — **received 2026-07-16** |
 | Purpose | Bedside CSI node for contactless sleep sensing |
+
+## Board facts (from OceanLabz card + silkscreen)
+
+- Module: ESP32-S3 WROOM-1-N16R8, 2.4 GHz antenna
+- CPU: dual-core Xtensa LX7 @ 240 MHz; 16 MB flash + 8 MB PSRAM
+- Wireless: WiFi 802.11 b/g/n + Bluetooth 5 (LE)
+- Programming: Arduino, MicroPython, ESP-IDF
+- **Two USB-C ports** — silkscreen/diagram labels them "ESP32-S3 Direct Type-C, USB & OTG" (left) vs. "USB to Serial C-Type / CH343P" (right), but **empirically only the left port has been confirmed working** on this unit (see below) — treat the diagram's left/right guidance with caution, verify which is live per-session with the PowerShell check below rather than assuming.
+- The **left port** enumerates as Windows "USB Serial Device", `VID_303A&PID_4001` (Espressif's own VID — this is the ESP32-S3's **built-in native USB-Serial/JTAG peripheral in silicon**, not the CH343P chip). No CH343SER driver needed for this path — Windows' inbox USB CDC driver handles it.
+- The right/CH343P port was never confirmed enumerating in testing (2 cables, 2 laptop ports, driver installed, zero PnP events) — may be a dead solder joint on this specific board, or we were consistently testing the wrong physical port due to orientation confusion. Unconfirmed either way — don't assume it works.
+- CH343SER driver from WCH (`https://www.wch.cn/downloads/CH343SER_EXE.html`) was installed as part of troubleshooting but turned out to be unnecessary for the working path — keep it installed in case the right port is used later.
+- Other markings: Power chip, Integrated RGB LED (WS2812), RST button, BOOT button, PWR/TX/RX LEDs
+
+## Preloaded test firmware (as shipped)
+
+- Board ships with OceanLabz test firmware already flashed
+- It hosts a WiFi AP: **SSID `OL-ESP32-AP`**, **password `12345678`**
+- Useful as a sanity check that the board itself boots, independent of USB/serial
 
 ## Also needed
 
-- USB **data** cable (not charge-only)
+- USB **data** cable (not charge-only) — many bundled cables are charge-only and will show zero enumeration
 - USB wall adapter (the “plug”)
 - Home Wi‑Fi + this PC on the same network
 
-## After arrival
+## Connecting via Arduino IDE (2.3.10+)
 
-1. Install USB serial driver (CP210x or CH340 — check the board)
-2. Flash RuView `esp32-csi-node` firmware (from sibling `RuView` repo)
-3. Provision Wi‑Fi + PC IP as sensing sink
-4. Point NightPlug ingest at the live feature stream (adapter TBD in `src/nightplug/`)
+1. Install the **CH343SER** driver (see above) — Windows has no inbox driver for this chip
+2. File → Preferences → Additional Boards Manager URLs → add:
+   `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
+3. Tools → Board → Boards Manager → install **esp32 by Espressif Systems**
+4. Plug into the **left** (native USB-OTG) port with a **Type-C to Type-C** cable, direct into a laptop port (no hub) — this is the port confirmed working on this unit
+5. Tools → Port — a new `COM#` should appear. **Verify it's the real board**, not a pre-existing Bluetooth virtual COM port (e.g. this machine already has `COM3`/`COM4` as "Standard Serial over Bluetooth link" before the board is ever plugged in — don't mistake those for the ESP32). Confirmed board identity via Tools → Get Board Info: **VID `0x303A` (Espressif), PID `0x4001`, SN `123456`** — shows as "Unknown board" in the IDE, that's fine, VID/PID confirms it's genuine.
+6. Select board: **ESP32S3 Dev Module**
+7. The COM number is **not stable** — it can change (COM5 → COM7 etc.) each time the board is unplugged/replugged. Always re-check Tools → Port before uploading.
+
+### Resolved: board not detected (root cause was the cable)
+
+On this unit, a **Type-A→Type-C cable would not enumerate at all**, even confirmed "data" cables that worked for phone sync — zero USB events in Windows PnP logs across 2 cables and 2 laptop ports. Switching to a **Type-C→Type-C cable** fixed it immediately. **If the board isn't detected, try a C-to-C cable before suspecting the board or driver.**
+
+General diagnosis, if it happens again:
+
+- Confirm via PowerShell that a *new* device actually enumerates:
+  `Get-PnpDevice -PresentOnly | Where-Object { $_.Class -eq 'Ports' }` — compare against the baseline Bluetooth-only COM ports before plugging in
+  `pnputil /enum-devices /connected /class USB` — look for a new `USB\VID_303A&PID_4001` entry
+  `Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Kernel-PnP/Configuration'; StartTime=(Get-Date).AddMinutes(-5)}` — should show connect/disconnect activity the moment you plug in; if this stays empty across multiple cable/port combos, it's an electrical/hardware issue, not a driver one
+- Try a **Type-C to Type-C cable first** (this fixed it for us), a different laptop USB port (no hub), and if still nothing, test the board on a different PC/phone to isolate board vs. this laptop
+
+### Uploading: auto-reset isn't wired — manual BOOT hold required
+
+Every upload fails with `Failed to connect to ESP32-S3: No serial data received` unless you manually force bootloader mode, because this board's CH343P DTR/RTS aren't wired to auto-trigger BOOT/EN:
+
+1. **Press and hold BOOT** first — before clicking Upload
+2. **While still holding BOOT**, click **Upload** in Arduino IDE
+3. **Keep holding BOOT** through the whole "Connecting......." phase
+4. Release BOOT once it starts writing (or clearly fails)
+
+If it still fails with BOOT held throughout, try dropping Tools → Upload Speed to `115200` (default is often 921600).
+
+## After it enumerates
+
+1. ~~Install USB serial driver (CP210x or CH340 — check the board)~~ → CH343SER (see above) — **done, working (2026-07-16)**
+2. Flash RuView `esp32-csi-node` firmware (from sibling `RuView` repo) — **done, v0.6.7 flashed 2026-07-16** via:
+   ```
+   python -m esptool --chip esp32s3 --port COM7 --baud 460800 \
+     write_flash --flash_mode dio --flash_size 16MB \
+     0x0     firmware/esp32-csi-node/release_bins/bootloader.bin \
+     0x8000  firmware/esp32-csi-node/release_bins/partition-table.bin \
+     0xf000  firmware/esp32-csi-node/release_bins/ota_data_initial.bin \
+     0x20000 firmware/esp32-csi-node/release_bins/esp32-csi-node.bin
+   ```
+   (needs `pip install esptool`; no BOOT-hold needed here — esptool resets via the native USB-Serial/JTAG mode automatically)
+3. Provision Wi-Fi + PC IP as sensing sink — **done**, via:
+   ```
+   python firmware/esp32-csi-node/provision.py --port COM7 \
+     --ssid "Airtel_Vikas_Home" --password "<redacted>" --target-ip 192.168.1.9
+   ```
+   (needs `pip install esp-idf-nvs-partition-gen`). **Important: the ESP32-S3 is 2.4GHz-only** — provision it against your router's 2.4GHz SSID, not a `_5ghz` one, or it will never associate.
+4. Point NightPlug ingest at the live feature stream — **done**: `python -m nightplug live --minutes N` (see `src/nightplug/ingest.py`, `src/nightplug/cli.py`). Listens on UDP 5005, parses the board's actual on-wire packet — **ADR-081 `rv_feature_state_t`, magic `0xC5110006`, 60 bytes** (not the older ADR-039 vitals packet documented in the RuView README as primary; that's now a fallback the firmware may not even send). Writes real Samples to `data/nights/*.jsonl`, same format the simulator produces, so `nightplug report` works unmodified on real data.
+
+### Resolved: CSI yield stuck at 0pps (fixed 2026-07-17)
+
+Board connected to WiFi fine (confirmed via serial log, RSSI ~-60dBm, UDP packets arriving at the target IP), but `presence`/`motion`/`respiration_bpm` all read constantly 0 because the underlying CSI engine mostly wasn't firing (`adaptive_ctrl: medium tick: ... yield=0pps` nearly always, serial-log-confirmed over multiple minutes).
+
+Root-caused via source read of `firmware/esp32-csi-node/main/csi_collector.c`: the firmware relies on a "self-ping" mechanism (RuView issues #521/#954) — pinging the router at 50Hz to guarantee a steady stream of OFDM reply frames that trigger the CSI callback, since ambient network traffic alone is too sparse. The self-ping session was dying shortly after WiFi reconnect (esp_ping sessions can terminate on transient errors like ARP failure even with `COUNT_INFINITE`) and the old no-op callbacks meant nothing restarted it — CSI yield dropped to 0 and stayed there.
+
+**Fix:** `csi_collector.c`'s `on_ping_end` callback now clears `s_self_ping`, so `csi_start_self_ping()` spins up a fresh session on the next tick instead of leaving a dead one in place. Committed in the sibling `RuView` repo (`aa8e2e59`, "fix(csi): restart self-ping session on end instead of going silent").
+
+**Build/flash notes for next time:** the README's documented Docker build command uses `espressif/idf:v5.2`, but that's stale — it fails with `Failed to resolve component 'esp_driver_uart'`. Use `espressif/idf:v5.4` (matches `.github/workflows/firmware-ci.yml`) instead:
+```
+MSYS_NO_PATHCONV=1 docker run --rm \
+  -v "$(pwd)/firmware/esp32-csi-node:/project" -w /project \
+  espressif/idf:v5.4 bash -c \
+  "rm -rf build sdkconfig && idf.py set-target esp32s3 && idf.py build"
+```
+
+**Confirmed on hardware (2026-07-17):** after reflashing, CSI yield sustained ~29-34pps over a 90-second serial capture (previously dropped to 0pps within seconds), `presence`/`motion`/`breathing_bpm` all read live non-zero values, and `python -m nightplug live` wrote 47 real Samples end-to-end to `data/nights/2026-07-17.jsonl`.
 
 ## Placement
 
