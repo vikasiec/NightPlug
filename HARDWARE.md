@@ -122,6 +122,28 @@ On the PC side, `python -m nightplug sync --host <esp32-ip>` pulls whatever was 
 
 Board's IP can change if your router doesn't reserve it — find it via `arp -a` (search for MAC `d4:05:92:79:93:b0`) or your router's DHCP client list if `sync` can't connect.
 
+## Local dashboard + experimental heart rate (added 2026-07-17)
+
+`python -m nightplug ui [--host <esp32-ip>]` launches a local web dashboard (stdlib `http.server`, no new dependency) with three pages:
+
+- **Tonight** — interactive version of the old static report: score, key metrics, motion/breathing charts, state timeline, "why this score."
+- **Trends** — score and breathing-rate history across nights, plus which nights needed `sync` to fill a gap. Net-new; nothing in the project showed multi-night history before this.
+- **Device** — buffer coverage, firmware version, a "Sync now" button. Only shows fields actually queryable over the device's HTTP API (`/ota/status`, `/data/status`) — no fabricated RSSI/uptime/CSI-yield, since those aren't exposed there (serial-log-only today).
+
+**Experimental heart rate**: the on-wire packet (`rv_feature_state_t`) always carried `heartbeat_bpm`/`heartbeat_conf`, but both the live-UDP parser and the buffer/sync path were silently discarding them. Now surfaced on the Tonight page with a visible "EXPERIMENTAL" badge and deliberately excluded from the sleep score — the firmware's `heartbeat_conf` is a binary plausible-range check (not a real confidence score), and this board has no mmWave hardware, so CSI-only heart rate is known to be far less reliable than presence/motion/breathing.
+
+## Future: mmWave hardware upgrade for real heart rate / HRV (researched, not purchased — 2026-07-17)
+
+Investigated what it would take to get reliable heart rate (and eventually HRV/stress, like RuView's `examples/medical/vitals_suite.py` and `examples/stress/hrv_stress_monitor.py`) instead of the CSI-only experimental estimate above.
+
+**Key finding: the firmware already fully supports this, unused.** `firmware/esp32-csi-node/main/mmwave_sensor.c`/`.h` (RuView repo) has a complete driver for Seeed's MR60BHA2 (60GHz, heart rate + breathing + presence) with auto-detection on boot — and `edge_processing.c` already has fusion logic wired in: the moment the firmware detects an mmWave sensor on the UART, it automatically switches to sending fused vitals using the mmWave's reading instead of the CSI-only estimate. This was built by RuView's team but never populated with real hardware on our board. A cheaper presence-only alternative (HLK-LD2410, 24GHz, no vitals) is also already supported.
+
+**Cost:** Seeed MR60BHA2 sensor kit (bundled with its own XIAO ESP32C6 MCU, which we wouldn't need) is **$22.90–24.90** ([Seeed Studio](https://www.seeedstudio.com/MR60BHA2-60GHz-mmWave-Sensor-Breathing-and-Heartbeat-Module-p-5945.html), [Mouser](https://www.mouser.com/new/seeed-studio/seeed-studio-mr60bha2-sensor-kit/)). The bare module (predecessor MR60BHA1, same UART protocol, 5V, ~85-90% claimed accuracy per Seeed's own specs — [bare module listing](https://www.seeedstudio.com/60GHz-mmWave-Radar-Sensor-Breathing-and-Heartbeat-Module-p-5305.html)) is the right part to wire directly into the ESP32-S3's UART instead of using its bundled MCU — realistic estimate **$15–30** including shipping either way.
+
+**Effort:** roughly an hour — wire 4 wires (VCC, GND, TX, RX) to a free UART on the ESP32-S3 (verify 3.3V vs 5V logic-level compatibility before connecting), flash the existing firmware as-is (no code changes needed, auto-detects at boot), mount near the bed alongside the existing board.
+
+**Not done yet** — revisit once the current local-buffer + dashboard work has proven itself over a few real nights.
+
 ## Placement
 
 - Nightstand, 1–2 m from mattress
